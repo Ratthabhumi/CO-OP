@@ -65,7 +65,7 @@ def save_report(
     """
     # ── Build filename ───────────────────────────────────────────────────────
     computer_name = system.get("computer_name", "UNKNOWN")
-    timestamp_str = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
+    timestamp_str = datetime.now().strftime("%d-%m-%Y_%H.%M")
 
     # Sanitize computer name: replace any character that's invalid in filenames
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in computer_name)
