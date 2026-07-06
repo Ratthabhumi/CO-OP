@@ -251,7 +251,8 @@ def _check_bitlocker() -> dict:
         {
             "status"              : "PASS" | "WARNING" | "FAIL",
             "detail"              : human-readable description,
-            "protection_status"   : "On" | "Off" | "Unknown" | "Unavailable"
+            "protection_status"   : "On" | "Off" | "Unknown" | "Unavailable",
+            "recovery_key"        : "ghp_..." | "Unavailable/Requires Admin"
         }
     """
     logger.info("Checking BitLocker...")
@@ -264,29 +265,47 @@ def _check_bitlocker() -> dict:
     status_map = {"0": "Off", "1": "On", "2": "Unknown"}
     protection = status_map.get(output, "Unavailable")
 
+    recovery_key = "Unavailable"
+
     if protection == "On":
+        # Attempt to retrieve Recovery Key (Requires Admin privileges)
+        key_cmd = (
+            "(Get-BitLockerVolume -MountPoint 'C:').KeyProtector | "
+            "Where-Object {$_.KeyProtectorType -eq 'RecoveryPassword'} | "
+            "Select-Object -ExpandProperty RecoveryPassword"
+        )
+        key_output = _run_powershell(key_cmd)
+        if key_output:
+            recovery_key = key_output
+        else:
+            recovery_key = "Requires Administrator Privileges"
+
         return {
             "status": "PASS",
             "detail": "BitLocker is enabled and protecting C: drive",
             "protection_status": protection,
+            "recovery_key": recovery_key,
         }
     elif protection == "Unknown":
         return {
             "status": "WARNING",
             "detail": "BitLocker status is Unknown — may be suspended",
             "protection_status": protection,
+            "recovery_key": "Unknown",
         }
     elif protection == "Off":
         return {
             "status": "FAIL",
             "detail": "BitLocker is OFF — C: drive is not encrypted",
             "protection_status": protection,
+            "recovery_key": "None",
         }
     else:
         return {
             "status": "FAIL",
             "detail": "BitLocker not available (requires Windows Pro/Enterprise)",
             "protection_status": protection,
+            "recovery_key": "None",
         }
 
 

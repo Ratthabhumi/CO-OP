@@ -61,6 +61,7 @@ COLUMNS: list[tuple[str, list[str], int]] = [
     ("Firewall",         ["security", "firewall", "status"],                        12),
     ("Defender",         ["security", "defender", "status"],                        12),
     ("BitLocker",        ["security", "bitlocker", "status"],                       12),
+    ("BitLocker Key",    ["security", "bitlocker", "recovery_key"],                 50),
     ("Windows Update",   ["security", "windows_update", "status"],                  16),
     ("WinDefend Svc",    ["services", "WinDefend", "status"],                       16),
     ("BITS Svc",         ["services", "BITS", "status"],                            12),
