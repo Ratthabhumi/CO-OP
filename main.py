@@ -239,7 +239,7 @@ def main() -> int:
     # Format: logs/COMPUTERNAME_YYYYMMDD.log
     computer_name = socket.gethostname()
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in computer_name)
-    date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+    date_str = datetime.now(timezone.utc).strftime("%d-%m-%Y")
     log_file = LOGS_DIR / f"{safe_name}_{date_str}.log"
 
     setup_logging(log_file)
