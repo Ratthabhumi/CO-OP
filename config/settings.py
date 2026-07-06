@@ -9,14 +9,20 @@ Design Principle:
     Supports easy extension in Version 2/3 without touching scanner logic.
 """
 
+import sys
 from pathlib import Path
 
 # ─────────────────────────────────────────────
 # Base Paths
 # ─────────────────────────────────────────────
 
-# __file__ → settings.py → config/ → USB_Auditor/
-BASE_DIR: Path = Path(__file__).resolve().parent.parent
+# If running as a compiled PyInstaller EXE, sys.frozen is True.
+# sys.executable gives the path to the EXE on the USB drive.
+# If running as raw script, resolve via __file__.
+if getattr(sys, "frozen", False):
+    BASE_DIR: Path = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR: Path = Path(__file__).resolve().parent.parent
 
 REPORTS_DIR: Path = BASE_DIR / "reports"
 LOGS_DIR: Path = BASE_DIR / "logs"
