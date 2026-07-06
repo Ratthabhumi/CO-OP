@@ -1,28 +1,33 @@
 @echo off
-title Windows Compliance Auditor Launcher
-:: ============================================================
-:: Portable Windows Compliance Auditor - Run As Admin Script
-:: ============================================================
+title Windows Compliance Auditor
+setlocal
 
-:: 1. Check for Administrative Privileges
+:: ── Step 1: Move to the script's own directory (USB Drive root) ──
+cd /d "%~dp0"
+
+:: ── Step 2: Check for Administrator rights ──────────────────────
 net session >nul 2>&1
-if %errorLevel% == 0 (
-    echo [INFO] Running with Administrator privileges...
-    
-    rem Go to the directory of this batch script (on the USB drive)
-    cd /d "%~dp0"
-    
-    rem Run the compiled auditor program with auto export flag
-    WindowsAuditor.exe --export
-    
-    echo.
-    echo ============================================================
-    echo [INFO] Scan complete. You can safely close this window.
-    echo ============================================================
-    pause
-) else (
-    echo [INFO] Requesting Administrator privileges (UAC Prompt)...
-    
-    rem Re-launch this script and request RunAs (Admin elevation)
-    powershell -Command "Start-Process -FilePath '%~0' -Verb RunAs"
-)
+if %errorLevel% == 0 goto :RUN_AUDIT
+
+:: ── Not Admin: Re-launch self with UAC elevation ─────────────────
+echo  [INFO] Requesting Administrator privileges...
+powershell -Command "Start-Process -FilePath '%~0' -Verb RunAs"
+exit /b
+
+:: ── Admin: Run the auditor ───────────────────────────────────────
+:RUN_AUDIT
+echo.
+echo  +------------------------------------------------------+
+echo  ^|   Portable Windows Compliance Auditor  v1.0         ^|
+echo  ^|   Starting scan... Please wait.                     ^|
+echo  +------------------------------------------------------+
+echo.
+
+WindowsAuditor.exe --export
+
+echo.
+echo  +------------------------------------------------------+
+echo  ^|   Scan complete! Reports saved to reports/           ^|
+echo  +------------------------------------------------------+
+echo.
+pause
