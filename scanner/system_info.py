@@ -128,10 +128,7 @@ def get_system_info() -> dict:
         logger.warning("Could not read MAC address: %s", exc)
         info["mac_address"] = "Unknown"
 
-    # ── Scan Timestamp ───────────────────────────────────────────────────────
-    # Always store in UTC ISO-8601 format for log correlation consistency.
-    # DevSecOps: timestamps must be timezone-aware for SIEM integration (V3).
-    info["scan_timestamp"] = datetime.now(timezone.utc).isoformat()
+    info["scan_timestamp"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
 
     logger.info("System information collected: %s", info["computer_name"])
     return info
