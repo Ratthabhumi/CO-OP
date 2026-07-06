@@ -35,7 +35,7 @@ LOGS_DIR.mkdir(parents=True, exist_ok=True)
 # Log File
 # ─────────────────────────────────────────────
 
-LOG_FILE: Path = LOGS_DIR / "auditor.log"
+LOG_FILE: Path = LOGS_DIR / "auditor.log"   # fallback (used if called outside main)
 
 # ─────────────────────────────────────────────
 # Compliance Score Weights

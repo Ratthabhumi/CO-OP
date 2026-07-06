@@ -24,10 +24,12 @@ Design:
 import argparse
 import ctypes
 import logging
+import socket
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
-from config.settings import LOG_FILE, LOGS_DIR
+from config.settings import LOGS_DIR
 from scanner.system_info import get_system_info
 from scanner.security    import get_security_info
 from scanner.services    import get_services_info
@@ -39,14 +41,14 @@ from exporters.excel_exporter import export_summary
 
 # ── Logging Setup ────────────────────────────────────────────────────────────
 
-def setup_logging() -> None:
+def setup_logging(log_file: Path) -> None:
     """
     Configure logging to write to both:
-        - Console (INFO level) — operator sees progress in real time
-        - Log file (DEBUG level) — full detail for post-incident analysis
+        - Console (INFO level) -- operator sees progress in real time
+        - Log file (DEBUG level) -- full detail for post-incident analysis
 
-    Log file location: logs/auditor.log
-    Format includes timestamp, level, module, and message.
+    Log filename: logs/{ComputerName}_{YYYYMMDD}.log
+    Each machine gets its own log file -- no mixed entries.
     Rotating the log file is a V2 enhancement (use RotatingFileHandler).
     """
     log_format = "%(asctime)s [%(levelname)-8s] %(name)s - %(message)s"
@@ -62,7 +64,7 @@ def setup_logging() -> None:
                             # Console handler -- INFO and above
                             logging.StreamHandler(sys.stdout),
                             # File handler -- DEBUG and above (full trace)
-                            logging.FileHandler(LOG_FILE, encoding="utf-8"),
+                            logging.FileHandler(log_file, encoding="utf-8"),
                         ])
 
     # Silence overly verbose third-party loggers
@@ -231,7 +233,16 @@ def run_scan(logger: logging.Logger) -> int:
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main() -> int:
-    setup_logging()
+    # ── Build per-machine log file path BEFORE setup_logging ────────────────
+    # Use socket.gethostname() here (not get_system_info) to avoid
+    # importing scanner before logging is ready.
+    # Format: logs/COMPUTERNAME_YYYYMMDD.log
+    computer_name = socket.gethostname()
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in computer_name)
+    date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+    log_file = LOGS_DIR / f"{safe_name}_{date_str}.log"
+
+    setup_logging(log_file)
     logger = logging.getLogger(__name__)
 
     print_banner()
