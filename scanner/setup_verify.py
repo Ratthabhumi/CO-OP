@@ -1,0 +1,235 @@
+"""
+scanner/setup_verify.py
+
+Post-Clone Setup Verification Scanner
+
+Verifies that Windows setup steps performed after imaging/cloning
+have been completed correctly per the organization's deployment checklist.
+
+Checks (aligned to Post-Clone Checklist):
+    - Timezone      : Must be UTC+07:00 Bangkok (Step 5)
+    - SentinelOne   : Agent service must be running (Steps 22/23)
+    - WiFi Profiles : Must be 0 saved profiles (Step 24)
+    - New Outlook   : Must be uninstalled (Step 31)
+    - Xbox App      : Must be uninstalled (Step 32)
+
+Scoring:
+    PASS    = requirement met
+    WARNING = uncertain / could not determine
+    FAIL    = requirement not met
+
+Design:
+    Uses PowerShell for AppX and WiFi checks (no native Python equivalent).
+    Uses psutil for SentinelOne service check (consistent with services.py).
+"""
+
+import logging
+import subprocess
+
+import psutil
+
+logger = logging.getLogger(__name__)
+
+
+# ── PowerShell Helper ─────────────────────────────────────────────────────────
+
+def _run_powershell(command: str, timeout: int = 15) -> str:
+    """
+    Run a PowerShell command and return stripped stdout.
+    Returns empty string on any failure.
+    """
+    try:
+        result = subprocess.run(
+            ["powershell", "-NonInteractive", "-NoProfile", "-Command", command],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        return result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return ""
+
+
+# ── Individual Checks ─────────────────────────────────────────────────────────
+
+def _check_timezone() -> dict:
+    """
+    Verify system timezone is set to UTC+07:00 Bangkok.
+
+    Expected Windows timezone ID: "SE Asia Standard Time"
+
+    Why check this?
+        Incorrect timezone causes log timestamps to be wrong,
+        which breaks audit trail correlation and Kerberos authentication.
+    """
+    output = _run_powershell("(Get-TimeZone).Id")
+    expected = "SE Asia Standard Time"
+
+    if output == expected:
+        return {
+            "status": "PASS",
+            "detail": f"Timezone correctly set to UTC+07:00 Bangkok ({output})",
+            "timezone_id": output,
+        }
+    elif output:
+        return {
+            "status": "FAIL",
+            "detail": f"Timezone is '{output}' — expected '{expected}' (UTC+07:00 Bangkok)",
+            "timezone_id": output,
+        }
+    else:
+        return {
+            "status": "WARNING",
+            "detail": "Could not read timezone — check may need Admin rights",
+            "timezone_id": "Unknown",
+        }
+
+
+def _check_sentinelone() -> dict:
+    """
+    Verify SentinelOne endpoint protection agent is installed and running.
+
+    Service name: SentinelAgent
+    Expected state: running
+
+    Why check this?
+        SentinelOne is the primary EDR (Endpoint Detection and Response)
+        solution. A machine without a running agent is unprotected and
+        invisible to the security operations center (SOC).
+    """
+    service_name = "SentinelAgent"
+    try:
+        svc = psutil.win_service_get(service_name)
+        info = svc.as_dict()
+        state = info.get("status", "unknown")
+
+        if state == "running":
+            return {
+                "status": "PASS",
+                "detail": "SentinelOne agent is installed and running",
+                "actual_state": state,
+            }
+        else:
+            return {
+                "status": "FAIL",
+                "detail": f"SentinelOne agent is installed but NOT running (state: {state})",
+                "actual_state": state,
+            }
+
+    except psutil.NoSuchProcess:
+        return {
+            "status": "FAIL",
+            "detail": "SentinelOne agent is NOT installed on this machine",
+            "actual_state": "not_installed",
+        }
+    except Exception as exc:
+        logger.warning("SentinelOne check failed: %s", exc)
+        return {
+            "status": "WARNING",
+            "detail": f"Could not check SentinelOne status: {exc}",
+            "actual_state": "unknown",
+        }
+
+
+def _check_wifi_profiles() -> dict:
+    """
+    Verify that all WiFi profiles have been deleted after setup.
+
+    Expected: 0 saved profiles (all forgotten before handover).
+
+    Why check this?
+        Saved WiFi profiles may contain corporate or personal SSIDs/credentials
+        from the imaging environment. They should be purged before deployment.
+    """
+    output = _run_powershell(
+        "(netsh wlan show profiles | Select-String 'All User Profile').Count"
+    )
+
+    try:
+        count = int(output)
+    except (ValueError, TypeError):
+        # No WiFi adapter or WLAN service not running
+        return {
+            "status": "WARNING",
+            "detail": "Could not determine WiFi profile count (no WLAN adapter or service disabled)",
+            "profile_count": -1,
+        }
+
+    if count == 0:
+        return {
+            "status": "PASS",
+            "detail": "All WiFi profiles have been removed (0 profiles saved)",
+            "profile_count": 0,
+        }
+    else:
+        return {
+            "status": "FAIL",
+            "detail": f"{count} WiFi profile(s) still saved — must be 0 before handover",
+            "profile_count": count,
+        }
+
+
+def _check_appx_uninstalled(package_name: str, display_name: str) -> dict:
+    """
+    Verify that an AppX/MSIX package is NOT installed on this machine.
+
+    PASS = package not found (correctly uninstalled)
+    FAIL = package still present
+
+    Args:
+        package_name : The AppX package name to check (e.g., "Microsoft.GamingApp")
+        display_name : Human-readable label for error messages
+    """
+    output = _run_powershell(
+        f"(Get-AppxPackage -Name '{package_name}' -AllUsers).Name"
+    )
+    is_uninstalled = not bool(output)
+
+    if is_uninstalled:
+        return {
+            "status": "PASS",
+            "detail": f"{display_name} is not installed",
+            "installed": False,
+        }
+    else:
+        return {
+            "status": "FAIL",
+            "detail": f"{display_name} is still installed — should be uninstalled",
+            "installed": True,
+        }
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def get_setup_verify_info() -> dict:
+    """
+    Run all post-clone setup verification checks.
+
+    Returns:
+        dict with check results for each verification item.
+        Each value contains at minimum: status, detail.
+    """
+    logger.info("Starting post-clone setup verification...")
+
+    results = {
+        "timezone":    _check_timezone(),
+        "sentinelone": _check_sentinelone(),
+        "wifi_profiles": _check_wifi_profiles(),
+        "new_outlook": _check_appx_uninstalled(
+            "Microsoft.OutlookForWindows", "New Outlook"
+        ),
+        "xbox": _check_appx_uninstalled(
+            "Microsoft.GamingApp", "Xbox / Gaming App"
+        ),
+    }
+
+    pass_count = sum(1 for v in results.values() if v["status"] == "PASS")
+    warn_count = sum(1 for v in results.values() if v["status"] == "WARNING")
+    fail_count = sum(1 for v in results.values() if v["status"] == "FAIL")
+
+    logger.info(
+        "Setup verification complete -- PASS: %d | WARNING: %d | FAIL: %d",
+        pass_count, warn_count, fail_count,
+    )
+
+    return results

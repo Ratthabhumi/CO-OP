@@ -73,6 +73,12 @@ COLUMNS: list[tuple[str, list[str], int]] = [
     ("SMBv1",            ["registry", "SMBv1", "status"],                           12),
     ("Compliance Score", ["compliance_score"],                                       18),
     ("Verdict",          ["compliance", "verdict"],                                  16),
+    # ── Post-Clone Setup Verification ─────────────────────────────────────────
+    ("Timezone",         ["setup_verify", "timezone",      "status"],               14),
+    ("SentinelOne",      ["setup_verify", "sentinelone",   "status"],               14),
+    ("WiFi Profiles",    ["setup_verify", "wifi_profiles", "status"],               14),
+    ("New Outlook",      ["setup_verify", "new_outlook",   "status"],               14),
+    ("Xbox",             ["setup_verify", "xbox",          "status"],               12),
     ("Scan Date",        ["system", "scan_timestamp"],                              22),
 ]
 

@@ -85,38 +85,47 @@ def calculate_compliance(
     security: dict,
     services: dict,
     registry: dict,
+    setup_verify: dict | None = None,
 ) -> dict:
     """
     Calculate overall compliance score from all scanner results.
 
     Args:
-        security : Result dict from scanner/security.py
-        services : Result dict from scanner/services.py
-        registry : Result dict from scanner/registry.py
+        security      : Result dict from scanner/security.py
+        services      : Result dict from scanner/services.py
+        registry      : Result dict from scanner/registry.py
+        setup_verify  : Result dict from scanner/setup_verify.py (optional)
 
     Returns:
         {
-            "score"        : int   (0–100, percentage),
+            "score"        : int   (0-100, percentage),
             "verdict"      : str   ("Compliant" | "Non-Compliant"),
             "total_checks" : int   (number of individual checks evaluated),
             "pass_count"   : int,
             "warning_count": int,
             "fail_count"   : int,
             "breakdown": {
-                "security": { "score": int, "checks": int },
-                "services": { "score": int, "checks": int },
-                "registry": { "score": int, "checks": int },
+                "security"     : { "score": int, "checks": int },
+                "services"     : { "score": int, "checks": int },
+                "registry"     : { "score": int, "checks": int },
+                "setup_verify" : { "score": int, "checks": int },
             }
         }
     """
     logger.info("Calculating compliance score...")
 
     # ── Collect statuses per domain ──────────────────────────────────────────
-    security_statuses = _extract_statuses(security)
-    services_statuses = _extract_statuses(services)
-    registry_statuses = _extract_statuses(registry)
+    security_statuses     = _extract_statuses(security)
+    services_statuses     = _extract_statuses(services)
+    registry_statuses     = _extract_statuses(registry)
+    setup_verify_statuses = _extract_statuses(setup_verify) if setup_verify else []
 
-    all_statuses = security_statuses + services_statuses + registry_statuses
+    all_statuses = (
+        security_statuses
+        + services_statuses
+        + registry_statuses
+        + setup_verify_statuses
+    )
 
     # ── Per-domain scores for breakdown ─────────────────────────────────────
     def domain_score(statuses: list[str]) -> int:
@@ -163,6 +172,10 @@ def calculate_compliance(
             "registry": {
                 "score":  domain_score(registry_statuses),
                 "checks": len(registry_statuses),
+            },
+            "setup_verify": {
+                "score":  domain_score(setup_verify_statuses),
+                "checks": len(setup_verify_statuses),
             },
         },
     }

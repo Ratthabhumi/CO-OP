@@ -30,11 +30,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from config.settings import LOGS_DIR
-from scanner.system_info import get_system_info
-from scanner.security    import get_security_info
-from scanner.services    import get_services_info
-from scanner.registry    import get_registry_info
-from scanner.compliance  import calculate_compliance
+from scanner.system_info    import get_system_info
+from scanner.security       import get_security_info
+from scanner.services       import get_services_info
+from scanner.registry       import get_registry_info
+from scanner.setup_verify   import get_setup_verify_info
+from scanner.compliance     import calculate_compliance
 from exporters.json_exporter  import save_report
 from exporters.excel_exporter import export_summary
 
@@ -147,13 +148,14 @@ def run_scan(logger: logging.Logger) -> int:
         2. Run security checks
         3. Audit Windows Services
         4. Audit Registry
-        5. Calculate compliance score
-        6. Save JSON report
+        5. Post-clone Setup Verification
+        6. Calculate compliance score
+        7. Save JSON report
 
     Returns:
         Exit code: 0 = Compliant, 1 = Non-Compliant, 2 = Fatal error
     """
-    print("\n[1/6] Collecting system information...")
+    print("\n[1/7] Collecting system information...")
     try:
         system = get_system_info()
         print(f"      [OK]  Computer : {system['computer_name']}")
@@ -163,7 +165,7 @@ def run_scan(logger: logging.Logger) -> int:
         logger.critical("FATAL: Could not collect system info: %s", exc)
         return 2
 
-    print("\n[2/6] Auditing Windows Security...")
+    print("\n[2/7] Auditing Windows Security...")
     try:
         security = get_security_info()
         for name, result in security.items():
@@ -178,7 +180,7 @@ def run_scan(logger: logging.Logger) -> int:
         logger.critical("FATAL: Security scan failed: %s", exc)
         return 2
 
-    print("\n[3/6] Auditing Windows Services...")
+    print("\n[3/7] Auditing Windows Services...")
     try:
         services = get_services_info()
         for svc_name, result in services.items():
@@ -193,7 +195,7 @@ def run_scan(logger: logging.Logger) -> int:
         logger.critical("FATAL: Services scan failed: %s", exc)
         return 2
 
-    print("\n[4/6] Auditing Registry...")
+    print("\n[4/7] Auditing Registry...")
     try:
         registry = get_registry_info()
         for key_name, result in registry.items():
@@ -203,9 +205,24 @@ def run_scan(logger: logging.Logger) -> int:
         logger.critical("FATAL: Registry scan failed: %s", exc)
         return 2
 
-    print("\n[5/6] Calculating Compliance Score...")
+    print("\n[5/7] Verifying Post-Clone Setup...")
     try:
-        compliance = calculate_compliance(security, services, registry)
+        setup_verify = get_setup_verify_info()
+        for check_name, result in setup_verify.items():
+            if result["status"] == "PASS":
+                icon = "[OK]  "
+            elif result["status"] == "WARNING":
+                icon = "[WARN]"
+            else:
+                icon = "[FAIL]"
+            print(f"      {icon} {check_name:<20} -> {result['status']}")
+    except Exception as exc:
+        logger.critical("FATAL: Setup verification failed: %s", exc)
+        return 2
+
+    print("\n[6/7] Calculating Compliance Score...")
+    try:
+        compliance = calculate_compliance(security, services, registry, setup_verify)
         score   = compliance["score"]
         verdict = compliance["verdict"]
         icon    = "[OK]  " if verdict == "Compliant" else "[FAIL]"
@@ -218,9 +235,9 @@ def run_scan(logger: logging.Logger) -> int:
         logger.critical("FATAL: Compliance calculation failed: %s", exc)
         return 2
 
-    print("\n[6/6] Saving JSON Report...")
+    print("\n[7/7] Saving JSON Report...")
     try:
-        report_path = save_report(system, security, services, registry, compliance)
+        report_path = save_report(system, security, services, registry, compliance, setup_verify)
         print(f"      [OK]  Saved: {report_path}")
     except OSError as exc:
         logger.critical("FATAL: Could not save report: %s", exc)

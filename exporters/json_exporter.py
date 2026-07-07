@@ -38,6 +38,7 @@ def save_report(
     services: dict,
     registry: dict,
     compliance: dict,
+    setup_verify: dict | None = None,
 ) -> Path:
     """
     Assemble all scan results into a single report dict and save as JSON.
@@ -76,13 +77,14 @@ def save_report(
     report = {
         "metadata": {
             "auditor_version": "1.0.0",
-            "report_format":   "1",                              # bump in V2 if schema changes
+            "report_format":   "1",
             "generated_at":    datetime.now(timezone.utc).isoformat(),
         },
         "system":           system,
         "security":         security,
         "services":         services,
         "registry":         registry,
+        "setup_verify":     setup_verify or {},
         "compliance_score": compliance["score"],
         "compliance":       compliance,
     }
