@@ -74,6 +74,7 @@ COLUMNS: list[tuple[str, list[str], int]] = [
     ("Compliance Score", ["compliance_score"],                                       18),
     ("Verdict",          ["compliance", "verdict"],                                  16),
     # ── Post-Clone Setup Verification ─────────────────────────────────────────
+    ("Computer Name (Serial)", ["setup_verify", "computer_name_serial", "status"],  22),
     ("Timezone",         ["setup_verify", "timezone",      "status"],               14),
     ("SentinelOne",      ["setup_verify", "sentinelone",   "status"],               14),
     ("WiFi Profiles",    ["setup_verify", "wifi_profiles", "status"],               14),
@@ -204,7 +205,7 @@ def export_summary() -> Path:
         # Registry
         "UAC", "RDP", "SMBv1",
         # Post-Clone Setup Verification
-        "Timezone", "SentinelOne", "WiFi Profiles", "New Outlook", "Xbox",
+        "Computer Name (Serial)", "Timezone", "SentinelOne", "WiFi Profiles", "New Outlook", "Xbox",
     }
     VERDICT_COLUMN = "Verdict"
 

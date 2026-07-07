@@ -7,6 +7,7 @@ Verifies that Windows setup steps performed after imaging/cloning
 have been completed correctly per the organization's deployment checklist.
 
 Checks (aligned to Post-Clone Checklist):
+    - Computer Name : Must match BIOS serial number (Step 3)
     - Timezone      : Must be UTC+07:00 Bangkok (Step 5)
     - SentinelOne   : Agent service must be running (Steps 22/23)
     - WiFi Profiles : Must be 0 saved profiles (Step 24)
@@ -51,6 +52,70 @@ def _run_powershell(command: str, timeout: int = 15) -> str:
 
 
 # ── Individual Checks ─────────────────────────────────────────────────────────
+
+def _check_computer_name_serial() -> dict:
+    """
+    Verify that the Computer Name matches the machine's BIOS serial number.
+
+    Expected: computer name equals serial number (or starts with it if a
+    location/department suffix has been appended, e.g. "5CD0141N35-Int3").
+
+    Scoring:
+        PASS    = computer name exactly equals BIOS serial number
+        WARNING = computer name starts with serial number (suffix present)
+        FAIL    = computer name does not contain the serial number
+
+    Why check this?
+        Deployment SOP requires the machine be renamed to its serial number
+        immediately after cloning for asset tracking and SCCM/WSUS compliance.
+    """
+    serial = _run_powershell(
+        "$ErrorActionPreference = 'SilentlyContinue'; "
+        "(Get-CimInstance Win32_BIOS).SerialNumber"
+    ).strip()
+
+    import socket
+    computer_name = socket.gethostname().upper()
+
+    if not serial:
+        return {
+            "status": "WARNING",
+            "detail": "Could not read BIOS serial number",
+            "computer_name": computer_name,
+            "serial_number": None,
+        }
+
+    serial_upper = serial.upper()
+
+    if computer_name == serial_upper:
+        return {
+            "status": "PASS",
+            "detail": f"Computer name matches serial number ({serial})",
+            "computer_name": computer_name,
+            "serial_number": serial,
+        }
+    elif computer_name.startswith(serial_upper):
+        suffix = computer_name[len(serial_upper):]
+        return {
+            "status": "WARNING",
+            "detail": (
+                f"Computer name starts with serial number but has suffix '{suffix}' "
+                f"— acceptable if intentional (e.g. location code)"
+            ),
+            "computer_name": computer_name,
+            "serial_number": serial,
+        }
+    else:
+        return {
+            "status": "FAIL",
+            "detail": (
+                f"Computer name '{computer_name}' does not match "
+                f"serial number '{serial}' — rename the machine"
+            ),
+            "computer_name": computer_name,
+            "serial_number": serial,
+        }
+
 
 def _check_timezone() -> dict:
     """
@@ -219,6 +284,7 @@ def get_setup_verify_info() -> dict:
     logger.info("Starting post-clone setup verification...")
 
     results = {
+        "computer_name_serial": _check_computer_name_serial(),
         "timezone":    _check_timezone(),
         "sentinelone": _check_sentinelone(),
         "wifi_profiles": _check_wifi_profiles(),
