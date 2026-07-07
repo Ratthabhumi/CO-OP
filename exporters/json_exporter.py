@@ -73,6 +73,16 @@ def save_report(
     filename = f"{safe_name}_{timestamp_str}.json"
     filepath = REPORTS_DIR / filename
 
+    # ── Remove old reports for same machine (1 machine = 1 file) ────────────
+    # Each audit overwrites the previous one so Excel always shows one row
+    # per machine, not one row per run.
+    for old_file in REPORTS_DIR.glob(f"{safe_name}_*.json"):
+        try:
+            old_file.unlink()
+            logger.info("Removed old report: %s", old_file.name)
+        except OSError as exc:
+            logger.warning("Could not remove old report '%s': %s", old_file.name, exc)
+
     # ── Assemble report payload ──────────────────────────────────────────────
     report = {
         "metadata": {
