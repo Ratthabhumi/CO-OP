@@ -196,10 +196,15 @@ def export_summary() -> Path:
 
     # ── Data rows ────────────────────────────────────────────────────────────
     STATUS_COLUMNS = {
+        # Security
         "Firewall", "Defender", "BitLocker", "Windows Update",
+        # Services
         "WinDefend Svc", "BITS Svc", "Windows Upd Svc",
         "Remote Registry", "W32Time Svc",
+        # Registry
         "UAC", "RDP", "SMBv1",
+        # Post-Clone Setup Verification
+        "Timezone", "SentinelOne", "WiFi Profiles", "New Outlook", "Xbox",
     }
     VERDICT_COLUMN = "Verdict"
 
