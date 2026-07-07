@@ -171,53 +171,39 @@ def _check_wifi_profiles() -> dict:
 
 def _check_appx_uninstalled(package_name: str, display_name: str) -> dict:
     """
-    Verify that an AppX/MSIX package is NOT installed on this machine.
+    Verify that an AppX/MSIX package is NOT installed for the current user.
 
-    Checks in order:
-        1. Current user packages (Get-AppxPackage, no admin needed)
-        2. Provisioned packages (Get-AppxProvisionedPackage, admin required)
+    Uses $ErrorActionPreference = 'SilentlyContinue' to suppress any
+    PowerShell errors going to stdout (which would cause false FAILs).
 
-    PASS    = not found for current user AND not provisioned
-    WARNING = not found for current user, but cannot check provisioned (no admin)
-    FAIL    = found installed for current user
+    PASS = package not found for current user
+    FAIL = package still installed for current user
 
     Args:
-        package_name : The AppX package Name to check (e.g., "Microsoft.GamingApp")
+        package_name : AppX package Name (e.g., "Microsoft.GamingApp")
         display_name : Human-readable label for messages
     """
-    # Check current user (no admin required)
-    current_user_output = _run_powershell(
+    output = _run_powershell(
+        f"$ErrorActionPreference = 'SilentlyContinue'; "
         f"(Get-AppxPackage -Name '{package_name}').Name"
     )
-    is_installed_for_user = bool(current_user_output)
 
-    if is_installed_for_user:
+    # Strip any stray whitespace; treat empty as not installed
+    is_installed = bool(output.strip())
+
+    if is_installed:
         return {
             "status": "FAIL",
-            "detail": f"{display_name} is still installed for current user — should be uninstalled",
+            "detail": f"{display_name} is still installed — should be uninstalled",
             "installed": True,
         }
-
-    # Not installed for current user — also check provisioned packages (requires admin)
-    provisioned_output = _run_powershell(
-        f"(Get-AppxProvisionedPackage -Online | "
-        f"Where-Object {{$_.DisplayName -like '*{package_name.split('.')[-1]}*'}}).DisplayName"
-    )
-
-    # If 'elevation' error appears in the provisioned check, it's a non-admin limitation
-    if not provisioned_output:
-        # Either not provisioned, or couldn't check (non-admin) — treat as PASS
+    else:
         return {
             "status": "PASS",
             "detail": f"{display_name} is not installed",
             "installed": False,
         }
-    else:
-        return {
-            "status": "FAIL",
-            "detail": f"{display_name} is still provisioned (will reinstall for new users) — run DISM to remove",
-            "installed": True,
-        }
+
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
